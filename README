@@ -1,0 +1,34 @@
+QJulia4D V 1.5
+===============
+
+5 Jan 2017
+by Yaochuang Ding, 
+
+
+Info
+====
+
+Raytraced morphing Julia quaternion fractal.
+Tested OK on windows 10 platform, no requires DX11 to be installed.
+
+
+Source
+======
+
+The original Cg code is by [Keenan Crane](http://www.cs.cmu.edu/~kmcrane/Projects/QuaternionJulia/)
+Then ported to HLSL by [Jan Vlietinck] (http://users.skynet.be/fquake/)
+But the source cannot build on Windows 10 because of old DX APIs, so I ported it again to make it
+build OK on Windows 10 platform. The default configuration is Release x64.
+
+
+
+Controls
+========
+
+Space bar           : toggle morphing animation
+Mouse left drag     : rotate fractal
+Mouse wheel         : zoom in/out
+P key               : toggle between compute and pixel shader
+S key               : toggle selfshadow
++/- num key         : increase /decrease fractal detail
+Alt + Enter         : toggle full screen
