@@ -22,6 +22,9 @@
 TrackBall trackBall;
 
 
+static void CreateComputeShaderObject();
+static void CreateGraphicShaderObject();
+
 ////////////////////////////////////////////////////////////////////////////////
 
 
@@ -114,9 +117,7 @@ void Render();
 // Entry point to the program. Initializes everything and goes into a message processing 
 // loop. Idle time is used to render the scene.
 //--------------------------------------------------------------------------------------
-//***********************************************************************************
 int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow )
-//***********************************************************************************
 {
   COLS = (LONG)::GetSystemMetrics( SM_CXSCREEN );
   ROWS = (LONG)::GetSystemMetrics( SM_CYSCREEN );
@@ -151,9 +152,7 @@ int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 //--------------------------------------------------------------------------------------
 // Register class and create window
 //--------------------------------------------------------------------------------------
-//***********************************************************************************
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
-//***********************************************************************************
 {
     // Register class
     WNDCLASSEX wcex;
@@ -176,15 +175,12 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
     g_hInst = hInstance;
     RECT rc = { 0, 0, COLS, ROWS };
     AdjustWindowRect( &rc, WS_OVERLAPPEDWINDOW, FALSE );
-
     g_hWnd = CreateWindow( L"QJulia4DWindowClass", L"QJulia4D DX11", WS_OVERLAPPEDWINDOW, 0, 0, rc.right - rc.left, rc.bottom - rc.top, NULL, NULL, hInstance, NULL );
-
 
     if( !g_hWnd )
         return E_FAIL;
 
     ShowWindow( g_hWnd, nCmdShow );
-
     return S_OK;
 }
 
@@ -193,7 +189,6 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
 void Resize()
 //***********************************************************************************
 {
-  
   if ( g_pd3dDevice == NULL)
     return;
 
@@ -207,7 +202,6 @@ void Resize()
   g_height = height;
   g_width  = width;
 
-
   // release references to back buffer before resize, else fails
   SAFE_RELEASE(g_pComputeOutput);
   SAFE_RELEASE(g_pRenderTargetView);
@@ -219,7 +213,6 @@ void Resize()
   // put vsync on for full screen, else tearing
   vsync = !sd.Windowed;
 
-  
   hr = g_pSwapChain->ResizeBuffers(sd.BufferCount, width, height, sd.BufferDesc.Format, 0);
 
   ID3D11Texture2D* pTexture;
@@ -228,48 +221,42 @@ void Resize()
 
   if (hasComputeShaders)
   {
-    // create shader unordered access view on back buffer for compute shader to write into texture
     hr = g_pd3dDevice->CreateUnorderedAccessView( pTexture, NULL, &g_pComputeOutput );
   }
 
   {
-    // create render target view
-    
     hr = g_pd3dDevice->CreateRenderTargetView( pTexture, NULL, &g_pRenderTargetView );
 
     // Setup the viewport
     D3D11_VIEWPORT vp;
-    vp.Width = width;
+    vp.Width  = width;
     vp.Height = height;
     vp.MinDepth = 0.0f;
     vp.MaxDepth = 1.0f;
     vp.TopLeftX = 0;
     vp.TopLeftY = 0;
     g_pImmediateContext->RSSetViewports( 1, &vp );
-
   }
 
   pTexture->Release();
-  
 }
 
 //--------------------------------------------------------------------------------------
 // Create Direct3D device and swap chain
 //--------------------------------------------------------------------------------------
-//***********************************************************************************
 HRESULT InitDevice()
-//***********************************************************************************
 {
     HRESULT hr = S_OK;
+    
     RECT rc;
     GetClientRect( g_hWnd, &rc );
     unsigned int width = rc.right - rc.left;
     unsigned int height = rc.bottom - rc.top;
-    unsigned int createDeviceFlags = 0;
 
-#ifdef _DEBUG
+    unsigned int createDeviceFlags = 0;
+    #ifdef _DEBUG
     createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
-#endif
+    #endif
 
     D3D_DRIVER_TYPE driverTypes[] =
     {
@@ -310,8 +297,7 @@ HRESULT InitDevice()
       FeatureLevel = D3D_FEATURE_LEVEL_10_0;
       sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
       hr = D3D11CreateDeviceAndSwapChain( NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, createDeviceFlags, &FeatureLevel,1,  D3D11_SDK_VERSION, &sd, &g_pSwapChain, &g_pd3dDevice, NULL, &g_pImmediateContext );
-
-      if (hr == S_OK)  // do rendering with pixel shaders on dx10 hardware
+      if (hr == S_OK)
         hasComputeShaders = false;
     }
     useComputeShaders = hasComputeShaders;
@@ -320,6 +306,16 @@ HRESULT InitDevice()
 		printf("- Create DX device and swap chain failed,exit.\n");
 		return hr;
 	}
+
+    // Create compute shader
+    DWORD dwShaderFlags = 0;
+    #if defined( DEBUG ) || defined( _DEBUG )
+      dwShaderFlags |= D3D10_SHADER_DEBUG;
+    #endif
+
+    if (hasComputeShaders)
+    { CreateComputeShaderObject(); }
+    CreateGraphicShaderObject();
 
     // Create constant buffer
     D3D11_BUFFER_DESC Desc;
@@ -330,138 +326,121 @@ HRESULT InitDevice()
     Desc.ByteWidth = ((sizeof( QJulia4DConstants ) + 15)/16)*16; // must be multiple of 16 bytes
     g_pd3dDevice->CreateBuffer( &Desc, NULL, &g_pcbFractal);
  
+    Resize();
+    srand((unsigned int)GetCurrentTime());
+    return S_OK;
+}
+
+static void CreateGraphicShaderObject()
+{
+    HRESULT hr = S_OK;
+    ID3D10Blob* pVSBuf = NULL;
+    ID3DBlob* pErrorBlob = nullptr;
+    ID3DBlob* pBlob = nullptr;
+    
+    // Create compute shader
+    DWORD dwShaderFlags = 0;
+    #if defined( DEBUG ) || defined( _DEBUG )
+    dwShaderFlags |= D3D10_SHADER_DEBUG;
+    #endif
+    
+    #if D3D_COMPILER_VERSION >= 46
+    hr = D3DCompileFromFile(L"qjulia4D.hlsl", NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, "VS", "vs_4_0", dwShaderFlags, 0, &pBlob, &pErrorBlob);
+    #else
+    hr = D3DX11CompileFromFile( L"qjulia4D.hlsl", NULL, NULL, "VS", "vs_4_0", dwShaderFlags, 0, NULL, &pBlob, &pErrorBlob, NULL );
+    #endif
+    if (FAILED(hr))
+    {
+        if (pErrorBlob) OutputDebugStringA((char*)pErrorBlob->GetBufferPointer());
+        SAFE_RELEASE(pErrorBlob);
+        SAFE_RELEASE(pBlob);
+        exit(1);
+    }
+    else
+    {
+        printf("- Compiling vertex shader OK.\n");
+    }
+    hr = g_pd3dDevice->CreateVertexShader( ( DWORD* )pBlob->GetBufferPointer(), pBlob->GetBufferSize(), NULL, &g_pVS10 );
+    SAFE_RELEASE(pBlob);
+    
+    #if D3D_COMPILER_VERSION >= 46
+    hr = D3DCompileFromFile(L"qjulia4D.hlsl", NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, "PS", "ps_4_0", dwShaderFlags, 0, &pBlob, &pErrorBlob);
+    #else
+    hr = D3DX11CompileFromFile( L"qjulia4D.hlsl", NULL, NULL, "PS", "ps_4_0", dwShaderFlags, 0, NULL, &pBlob, &pErrorBlob, NULL );
+    #endif
+    if (FAILED(hr))
+    {
+        if (pErrorBlob) OutputDebugStringA((char*)pErrorBlob->GetBufferPointer());
+        SAFE_RELEASE(pErrorBlob);
+        SAFE_RELEASE(pBlob);
+        exit(1);
+    }
+    else
+    {
+        printf("- Compile pixel shader OK.\n");
+    }
+    hr = g_pd3dDevice->CreatePixelShader( ( DWORD* )pBlob->GetBufferPointer(), pBlob->GetBufferSize(), NULL, &g_pPS10 );
+    SAFE_RELEASE(pErrorBlob);
+    SAFE_RELEASE(pBlob);
+
+    D3D11_RASTERIZER_DESC RSDesc;
+    RSDesc.FillMode = D3D11_FILL_SOLID;
+    RSDesc.CullMode = D3D11_CULL_NONE;
+    RSDesc.FrontCounterClockwise = FALSE;
+    RSDesc.DepthBias = 0;
+    RSDesc.DepthBiasClamp = 0;
+    RSDesc.SlopeScaledDepthBias = 0;
+    RSDesc.ScissorEnable = FALSE;
+    RSDesc.MultisampleEnable = TRUE;
+    RSDesc.AntialiasedLineEnable = FALSE;
+    g_pd3dDevice->CreateRasterizerState( &RSDesc, &g_pRasterizerState );
+
+    D3D11_DEPTH_STENCIL_DESC DSDesc;
+    ZeroMemory( &DSDesc, sizeof( D3D11_DEPTH_STENCIL_DESC ) );
+    DSDesc.DepthEnable = FALSE;
+    DSDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+    DSDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+    g_pd3dDevice->CreateDepthStencilState( &DSDesc, &g_pDepthState );
+}
+
+static void CreateComputeShaderObject()
+{
+    HRESULT hr = S_OK;
+    ID3DBlob* pErrorBlob = nullptr;
+    ID3DBlob* pBlob = nullptr;
+    
     // Create compute shader
     DWORD dwShaderFlags = 0;
     #if defined( DEBUG ) || defined( _DEBUG )
       dwShaderFlags |= D3D10_SHADER_DEBUG;
     #endif
+    
+    #if D3D_COMPILER_VERSION >= 46
+    hr = D3DCompileFromFile(L"qjulia4D.hlsl", NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, "CS_QJulia4D", "cs_5_0",  dwShaderFlags, 0, &pBlob, &pErrorBlob);
+    #else
+    hr = D3DX11CompileFromFile( L"qjulia4D.hlsl", NULL, NULL, "CS_QJulia4D", "cs_5_0", dwShaderFlags, 0, NULL, &pBlob, &pErrorBlob, NULL );
+    #endif
 
-    if (hasComputeShaders)
+    if (FAILED(hr))
     {
-	  ID3DBlob* pErrorBlob = nullptr;
-	  ID3DBlob* pBlob = nullptr;
-
-	  #if D3D_COMPILER_VERSION >= 46
-		hr = D3DCompileFromFile(L"qjulia4D.hlsl", NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, "CS_QJulia4D", "cs_5_0",  dwShaderFlags, 0, &pBlob, &pErrorBlob);
-	  #else
-		hr = D3DX11CompileFromFile( L"qjulia4D.hlsl", NULL, NULL, "CS_QJulia4D", "cs_5_0", dwShaderFlags, 0, NULL, &pBlob, &pErrorBlob, NULL );
-	  #endif
-	  if (FAILED(hr))
-	  {
-			if (pErrorBlob) OutputDebugStringA((char*)pErrorBlob->GetBufferPointer());
-			SAFE_RELEASE(pErrorBlob);
-			SAFE_RELEASE(pBlob);
-			return hr;
-	  }
-	  else
-	  {
-		  printf("- Compiling compute shader OK.\n");
-	  }
-		hr = g_pd3dDevice->CreateComputeShader( ( DWORD* )pBlob->GetBufferPointer(), pBlob->GetBufferSize(), NULL, &g_pCS_QJulia4D );
-		SAFE_RELEASE(pBlob);
+        if (pErrorBlob) OutputDebugStringA((char*)pErrorBlob->GetBufferPointer());
+        SAFE_RELEASE(pErrorBlob);
+        SAFE_RELEASE(pBlob);
     }
-    //else
+    else
     {
-      ID3D10Blob* pVSBuf = NULL;
-	  ID3DBlob* pErrorBlob = nullptr;
-	  ID3DBlob* pBlob = nullptr;
-
-	  #if D3D_COMPILER_VERSION >= 46
-		hr = D3DCompileFromFile(L"qjulia4D.hlsl", NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, "VS", "vs_4_0", dwShaderFlags, 0, &pBlob, &pErrorBlob);
-	  #else
-		hr = D3DX11CompileFromFile( L"qjulia4D.hlsl", NULL, NULL, "VS", "vs_4_0", dwShaderFlags, 0, NULL, &pBlob, &pErrorBlob, NULL );
-      #endif
-	  if (FAILED(hr))
-	  {
-		  if (pErrorBlob) OutputDebugStringA((char*)pErrorBlob->GetBufferPointer());
-		  SAFE_RELEASE(pErrorBlob);
-		  SAFE_RELEASE(pBlob);
-		  return hr;
-	  }
-	  else
-	  {
-		  printf("- Compiling vertex shader OK.\n");
-	  }
-      hr = g_pd3dDevice->CreateVertexShader( ( DWORD* )pBlob->GetBufferPointer(), pBlob->GetBufferSize(), NULL, &g_pVS10 );
-	  SAFE_RELEASE(pBlob);
-
-	  #if D3D_COMPILER_VERSION >= 46
-		hr = D3DCompileFromFile(L"qjulia4D.hlsl", NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, "PS", "ps_4_0", dwShaderFlags, 0, &pBlob, &pErrorBlob);
-	  #else
-        hr = D3DX11CompileFromFile( L"qjulia4D.hlsl", NULL, NULL, "PS", "ps_4_0", dwShaderFlags, 0, NULL, &pBlob, &pErrorBlob, NULL );
-      #endif
-	  if (FAILED(hr))
-	  {
-		  if (pErrorBlob) OutputDebugStringA((char*)pErrorBlob->GetBufferPointer());
-		  SAFE_RELEASE(pErrorBlob);
-		  SAFE_RELEASE(pBlob);
-		  return hr;
-	  }
-	  else
-	  {
-		  printf("- Compiling vertex shader OK.\n");
-	  }
-
-      hr = g_pd3dDevice->CreatePixelShader( ( DWORD* )pBlob->GetBufferPointer(), pBlob->GetBufferSize(), NULL, &g_pPS10 );
-
-	  SAFE_RELEASE(pErrorBlob);
-	  SAFE_RELEASE(pBlob);
-
-      // Create a rasterizer states for solid and wire frame
-      D3D11_RASTERIZER_DESC RSDesc;
-      RSDesc.FillMode = D3D11_FILL_SOLID;
-      RSDesc.CullMode = D3D11_CULL_NONE;
-      RSDesc.FrontCounterClockwise = FALSE;
-      RSDesc.DepthBias = 0;
-      RSDesc.DepthBiasClamp = 0;
-      RSDesc.SlopeScaledDepthBias = 0;
-      RSDesc.ScissorEnable = FALSE;
-      RSDesc.MultisampleEnable = TRUE;
-      RSDesc.AntialiasedLineEnable = FALSE;
-      g_pd3dDevice->CreateRasterizerState( &RSDesc, &g_pRasterizerState );
-
-
-      // Create a depth stencil state to enable less-equal depth testing
-      D3D11_DEPTH_STENCIL_DESC DSDesc;
-      ZeroMemory( &DSDesc, sizeof( D3D11_DEPTH_STENCIL_DESC ) );
-      DSDesc.DepthEnable = FALSE;
-      DSDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
-      DSDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-      g_pd3dDevice->CreateDepthStencilState( &DSDesc, &g_pDepthState );
-
+       printf("- Compile compute shader OK.\n");
     }
-    // text rendering
-    // Initialize the font
-/*
-    HDC hDC = GetDC( NULL );
-    int nHeight = -MulDiv( 12, GetDeviceCaps(hDC, LOGPIXELSY), 72 );
-    ReleaseDC( NULL, hDC );
-
-    D3DX10CreateFont( g_pd3dDevice, nHeight, 0, FW_BOLD, 1, FALSE, DEFAULT_CHARSET,
-                                OUT_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
-                                L"Arial", &g_pFont10 );
-    D3DX10CreateSprite( g_pd3dDevice, 512, &g_pSprite10 );
-*/
-    Resize();
-
-    // other random animation for each run
-    srand((unsigned int)GetCurrentTime());
-
-    return S_OK;
+    hr = g_pd3dDevice->CreateComputeShader( ( DWORD* )pBlob->GetBufferPointer(), pBlob->GetBufferSize(), NULL, &g_pCS_QJulia4D );
+    SAFE_RELEASE(pBlob);
+    SAFE_RELEASE(pErrorBlob);
 }
 
 //--------------------------------------------------------------------------------------
 // Clean up the objects we've created
 //--------------------------------------------------------------------------------------
-//***********************************************************************************
 void CleanupDevice()
-//***********************************************************************************
 {
-  /*
-    SAFE_RELEASE( g_pFont10 );
-    SAFE_RELEASE( g_pSprite10 );
-*/
-
     SAFE_RELEASE( g_pCS_QJulia4D );
     SAFE_RELEASE(g_pComputeOutput);
     SAFE_RELEASE(g_pcbFractal);
@@ -484,9 +463,7 @@ void CleanupDevice()
 //--------------------------------------------------------------------------------------
 // Called every time the application receives a message
 //--------------------------------------------------------------------------------------
-//***********************************************************************************
 LRESULT CALLBACK WndProc( HWND hWnd, unsigned int msg, WPARAM wParam, LPARAM lParam )
-//***********************************************************************************
 {
     const float fStepSize = 0.05f;
     static bool lbdown = false;
@@ -634,72 +611,18 @@ LRESULT CALLBACK WndProc( HWND hWnd, unsigned int msg, WPARAM wParam, LPARAM lPa
     return 0;
 }
 
-//*************************************************************************
-HRESULT RenderText()
-//*************************************************************************
+static void Interpolate( float m[4], float t, float a[4], float b[4] )
 {
-/*
-  if( NULL == g_pFont10 )
-    return S_FALSE;
-
-
-  // DrawText screws up depth and blend state so get and restore
-
-  ID3D11DepthStencilState *ppDepthStencilState;
-  unsigned int pStencilRef;
-  g_pd3dDevice->OMGetDepthStencilState(  &ppDepthStencilState, &pStencilRef);
-
-  ID3D11BlendState *ppBlendState;
-  FLOAT BlendFactor[4];
-  unsigned int pSampleMask;
-  g_pd3dDevice->OMGetBlendState( &ppBlendState, BlendFactor,  &pSampleMask);
-
-
-
-  D3DCOLOR fontColor        = 0xFFFFFF00; // yellow
-  TCHAR szMsg[MAX_PATH] = TEXT("");
-  RECT rct;
-  ZeroMemory( &rct, sizeof(rct) );       
-
-  
-  rct.left   = 2;
-  rct.right  = g_width - 20;
-
-  // Output display stats
-  INT nNextLine = -20; 
-
-  nNextLine += 20; rct.top = nNextLine; rct.bottom = rct.top + 20;    
-
-  g_pFont10->DrawText(NULL, message, -1, &rct, 0, fontColor );
-
-  nNextLine += 20; rct.top = nNextLine; rct.bottom = rct.top + 20;    
-
-  if (auto_lod)
-    g_pFont10->DrawText(NULL, L"60Hz autolod", -1, &rct, 0, fontColor );
-
-
-  g_pd3dDevice->OMSetDepthStencilState(  ppDepthStencilState, pStencilRef);
-  g_pd3dDevice->OMSetBlendState( ppBlendState, BlendFactor,  pSampleMask);
-*/
-  return S_OK;
-  
-}
-
-static void 
-Interpolate( float m[4], float t, float a[4], float b[4] )
-{
-    int i;
-    for ( i = 0; i < 4; i++ )
+    for ( int i = 0; i < 4; i++ )
         m[ i ] = ( 1.0f - t ) * a[ i ] + t * b[ i ];
 }
 
 
 float dt; // time increment depending on frame rendering time for same animation speed independent of rendering speed
 
-static void 
-UpdateMu( float t[4], float a[4], float b[4] )
+static void UpdateMu( float *t, float a[4], float b[4] )
 {
-    *t += 0.01f *dt;
+    *t += 0.01f * dt;
     
     if ( *t >= 1.0f )
     {
@@ -717,21 +640,18 @@ UpdateMu( float t[4], float a[4], float b[4] )
     }
 }
 
-static void
-RandomColor( float v[4] )
+static void RandomColor( float v[4] )
 {
     do
     {
-    v[ 0 ] = 2.0f * rand() / (float) RAND_MAX - 1.0f;
-    v[ 1 ] = 2.0f * rand() / (float) RAND_MAX - 1.0f;
-    v[ 2 ] = 2.0f * rand() / (float) RAND_MAX - 1.0f;
-    }
-    while (v[0] < 0 && v[1] <0 && v[2]<0); // prevent black colors
+		v[ 0 ] = 2.0f * rand() / (float) RAND_MAX - 1.0f;
+		v[ 1 ] = 2.0f * rand() / (float) RAND_MAX - 1.0f;
+		v[ 2 ] = 2.0f * rand() / (float) RAND_MAX - 1.0f;
+    } while (v[0] < 0 && v[1] <0 && v[2]<0); // prevent black colors
     v[ 3 ] = 1.0f;
 }
 
-static void 
-UpdateColor( float t[4], float a[4], float b[4] )
+static void UpdateColor( float t[4], float a[4], float b[4] )
 {
     *t += 0.01f *dt;
    
@@ -748,15 +668,11 @@ UpdateColor( float t[4], float a[4], float b[4] )
     }
 }
 
-
-
-//*************************************************************************
 void Render()
-//*************************************************************************
 {
 	static float elapsedPrev = 0;
 	float t = time.Elapsed();
-	dt = (elapsedPrev ==0) ? 1 :(t-elapsedPrev)/1000 *20;
+	dt = (elapsedPrev == 0) ? 1 : (t-elapsedPrev)/1000 * 20;
 	elapsedPrev = t;
 	if(animated)
 	{
@@ -766,9 +682,8 @@ void Render()
       Interpolate(ColorC, ColorT, ColorA, ColorB );
 	}
 
-// Fill constant buffer
-  D3D11_MAPPED_SUBRESOURCE msr;
-  g_pImmediateContext->Map(g_pcbFractal, 0, D3D11_MAP_WRITE_DISCARD, 0,  &msr);
+    D3D11_MAPPED_SUBRESOURCE msr;
+    g_pImmediateContext->Map(g_pcbFractal, 0, D3D11_MAP_WRITE_DISCARD, 0,  &msr);
 	QJulia4DConstants mc;
     mc.c_height = g_height;
     mc.c_width  = g_width;
@@ -787,50 +702,43 @@ void Render()
     for (int i=0; i<3; i++)
       mc.orientation[i + 4*j] = trackBall.GetRotationMatrix()(j,i);
     *(QJulia4DConstants *)msr.pData = mc;
-  g_pImmediateContext->Unmap(g_pcbFractal,0);
+    g_pImmediateContext->Unmap(g_pcbFractal,0);
 
-  if (useComputeShaders)
-  {
-    // Set compute shader
-    g_pImmediateContext->CSSetShader( g_pCS_QJulia4D, NULL, 0 );
-    // For CS output
-    ID3D11UnorderedAccessView* aUAViews[ 1 ] = { g_pComputeOutput };
-    g_pImmediateContext->CSSetUnorderedAccessViews( 0, 1, aUAViews, (unsigned int*)(&aUAViews) );
-    // For CS constant buffer
-    g_pImmediateContext->CSSetConstantBuffers( 0, 1, &g_pcbFractal );
-    // Run the CS
-    g_pImmediateContext->Dispatch( (g_width+3)/4, (g_height+63)/64, 1 );
-  }
-  else
-  {
-    g_pImmediateContext->VSSetShader(g_pVS10, NULL, 0);
-    g_pImmediateContext->PSSetShader(g_pPS10, NULL, 0);
-    g_pImmediateContext->CSSetShader(NULL   , NULL, 0);
-
-	//[Output merger stage](https://msdn.microsoft.com/zh-cn/data/bb205120(v=vs.100))
-    g_pImmediateContext->OMSetRenderTargets( 1, &g_pRenderTargetView, NULL );
-    g_pImmediateContext->OMSetDepthStencilState(g_pDepthState, 0);
-	//[Input Assembler stage](https://msdn.microsoft.com/zh-cn/data/bb205116(v=vs.100))
-    g_pImmediateContext->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP );
-    g_pImmediateContext->RSSetState(g_pRasterizerState);
-    g_pImmediateContext->PSSetConstantBuffers( 0, 1, &g_pcbFractal );
-    g_pImmediateContext->Draw(4, 0); // draw screen quad
-  }
-
-  RenderText();
-  // Present our back buffer to our front buffer
-  g_pSwapChain->Present( vsync ? 1 : 0, 0 );
-
-  if ( (t=time.Elapsed()/1000) - timer > 1) // every second
-  {  
-	float td = t - timer; // real time interval a bit more than a second
-    timer = t;
     if (useComputeShaders)
-      swprintf(message,L"     QJulia4D V1.5 FPS %.2f, using compute shader (dx11)", (float)fps/td);
+    {
+      ID3D11UnorderedAccessView* aUAViews[ 1 ] = { g_pComputeOutput };
+      g_pImmediateContext->CSSetUnorderedAccessViews( 0, 1, aUAViews, (unsigned int*)(&aUAViews) );
+      g_pImmediateContext->CSSetConstantBuffers( 0, 1, &g_pcbFractal );
+      g_pImmediateContext->CSSetShader( g_pCS_QJulia4D, NULL, 0 );
+      g_pImmediateContext->Dispatch( (g_width+3)/4, (g_height+63)/64, 1 );
+    }
     else
-      swprintf(message,L"     QJulia4D V1.5 FPS %.2f, using pixel shader (dx10)", (float)fps/td);
-    SetWindowText(g_hWnd, message);
-    fps=0;
-  }
-  fps++;
+    {
+      g_pImmediateContext->VSSetShader(g_pVS10, NULL, 0);
+      g_pImmediateContext->PSSetShader(g_pPS10, NULL, 0);
+      g_pImmediateContext->CSSetShader(NULL   , NULL, 0);
+
+      g_pImmediateContext->OMSetRenderTargets( 1, &g_pRenderTargetView, NULL );
+      g_pImmediateContext->OMSetDepthStencilState(g_pDepthState, 0);
+      g_pImmediateContext->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP );
+      g_pImmediateContext->RSSetState(g_pRasterizerState);
+      g_pImmediateContext->PSSetConstantBuffers( 0, 1, &g_pcbFractal );
+      g_pImmediateContext->Draw(4, 0); // draw screen quad
+    }
+
+    // Present our back buffer to our front buffer
+    g_pSwapChain->Present( vsync ? 1 : 0, 0 );
+
+    if ( (t=time.Elapsed()/1000) - timer > 1) // every second
+    {  
+	    float td = t - timer; // real time interval a bit more than a second
+        timer = t;
+        if (useComputeShaders)
+            swprintf(message,L"     QJulia4D V1.5 FPS %.2f, using compute shader (dx11)", (float)fps/td);
+        else
+            swprintf(message,L"     QJulia4D V1.5 FPS %.2f, using pixel shader (dx10)", (float)fps/td);
+        SetWindowText(g_hWnd, message);
+        fps=0;
+    }
+    fps++;
 }

@@ -9,6 +9,7 @@
 
 #define ITERATIONS                  10
 
+// declear a readable and writable texture as output target.
 RWTexture2D<float4> output : register (u0);
 
 
@@ -285,41 +286,32 @@ float4 QJulia( float3 rO ,                // ray origin
               float3 light,                 // location of a single point light
               bool renderShadows)           // flag for turning self-shadowing on/off
 {
-
    const float4 backgroundColor = float4( 0.3, 0.3, 0.3, 0 );  //define the background color of the image
-
    float4 color;  // This color is the final output of our program.
 
    // Initially set the output color to the background color.  It will stay
    // this way unless we find an intersection with the Julia set.
-   
    color = backgroundColor;
-
 
    // First, intersect the original ray with a sphere bounding the set, and
    // move the origin to the point of intersection.  This prevents an
    // unnecessarily large number of steps from being taken when looking for
    // intersection with the Julia set.
-
    rD = normalize( rD );  //the ray direction is interpolated and may need to be normalized
    rO = intersectSphere( rO, rD );
 
-
    // Next, try to find a point along the ray which intersects the Julia set.
    // (More details are given in the routine itself.)
-   
    float dist = intersectQJulia(rO, rD, mu, epsilon );
    
 
    // We say that we found an intersection if our estimate of the distance to
    // the set is smaller than some small value epsilon.  In this case we want
    // to do some shading / coloring.
-   
    if( dist < epsilon )
    {
       // Determine a "surface normal" which we'll use for lighting calculations.
       float3 N = normEstimate( rO, mu);
-
       // Compute the Phong illumination at the point of intersection.
       color.rgb = Phong( light, rD, rO, N );
       color.a = 1;  // (make this fragment opaque)
@@ -331,7 +323,6 @@ float4 QJulia( float3 rO ,                // ray origin
          // towards the point light.  We initially move the ray origin
          // a little bit along this direction so that we don't mistakenly
          // find an intersection with the same point again.
-
          float3 L = normalize( light - rO );
          rO += N*epsilon*2.0;
          dist = intersectQJulia( rO, L, mu, epsilon );
@@ -348,9 +339,10 @@ float4 QJulia( float3 rO ,                // ray origin
    return color;
 }
 
-
+// Thread Group Size
 [numthreads(4, 64, 1)]
 //****************************************************************************
+//Entry of compute shader.
 void CS_QJulia4D( uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex )
 //****************************************************************************
 { 
@@ -364,23 +356,18 @@ void CS_QJulia4D( uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
     float3 light = float3(1.5f, 0.5f, 4.0f);
     float3 eye   = float3(0.0f, 0.0f, 4.0f);
     float3 ray   = float3(position.x, position.y, 0.0f);
-    
 
     // rotate fractal
     light = mul(light, rotation);
     eye   = mul(  eye, rotation);
     ray   = mul(  ray, rotation);
     
-
-
     // ray start and ray direction
     float3 rO =  eye;
     float3 rD =  ray - rO;
-
     
     float4 color = QJulia(rO, rD, c_mu, c_epsilon, eye, light, c_selfShadow);
-	
-	  output[DTid.xy] = color;
+	output[DTid.xy] = color;
 }
 
 
