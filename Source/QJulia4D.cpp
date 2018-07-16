@@ -42,21 +42,15 @@ static float MuC[4]                     = { -.278f, -.479f, -.231f, .235f };
 
 ////////////////////////////////////////////////////////////////////////////////
 
-
-
-
-//-----------------------------------------------------------------------------
-// Global variables
-//-----------------------------------------------------------------------------
-
-bool animated = true;
-bool vsync = false; // redraw synced with screen refresh
+static bool animated = true;
+static bool vsync = false; // redraw synced with screen refresh
 
 WCHAR message[256];
-float timer=0;
+static Timer time;
+static float timer = 0.f;
+static int fps = 0;
+static bool  selfShadow = false;
 
-Timer time;
-int fps=0;
 float zoom = 1;
 
 typedef struct
@@ -75,7 +69,6 @@ int ROWS, COLS;
 #define HCOLS (COLS/2)
 #define HROWS (ROWS/2)
 
-bool  selfShadow = false;
 int g_width, g_height; // size of window
 
 #define SAFE_RELEASE(p)      { if(p) { (p)->Release(); (p)=NULL; } }
@@ -93,13 +86,13 @@ ID3D11Buffer*		    	g_pcbFractal;      // constant buffer
 ID3D11UnorderedAccessView*  g_pComputeOutput;  // compute output
   
 
-bool hasComputeShaders; // in case of dx10 feature level use pixel shader instead of compute shader
-bool useComputeShaders;  // can be toggled with p key, if off uses pixel shaders
+bool hasComputeShaders; 
+bool useComputeShaders; 
 
 ID3D11VertexShader*         g_pVS10;
 ID3D11PixelShader*          g_pPS10;
 ID3D11RasterizerState*      g_pRasterizerState;
-ID3D11DepthStencilState*	  g_pDepthState;
+ID3D11DepthStencilState*	g_pDepthState;
 
 
 
@@ -108,9 +101,10 @@ ID3D11DepthStencilState*	  g_pDepthState;
 //--------------------------------------------------------------------------------------
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 HRESULT InitDevice();
-void CleanupDevice();
 LRESULT CALLBACK    WndProc( HWND, unsigned int, WPARAM, LPARAM );
+
 void Render();
+void CleanupDevice();
 
 
 //--------------------------------------------------------------------------------------
@@ -119,6 +113,7 @@ void Render();
 //--------------------------------------------------------------------------------------
 int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow )
 {
+
   COLS = (LONG)::GetSystemMetrics( SM_CXSCREEN );
   ROWS = (LONG)::GetSystemMetrics( SM_CYSCREEN );
   SetCursorPos(HCOLS, HROWS); // set mouse to middle screen
@@ -145,6 +140,7 @@ int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
           Render();
       }
   }
+  
   CleanupDevice();
   return ( int )msg.wParam;
 }
@@ -185,9 +181,7 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
 }
 
 
-//***********************************************************************************
 void Resize()
-//***********************************************************************************
 {
   if ( g_pd3dDevice == NULL)
     return;
@@ -206,7 +200,6 @@ void Resize()
   SAFE_RELEASE(g_pComputeOutput);
   SAFE_RELEASE(g_pRenderTargetView);
 
-  
   DXGI_SWAP_CHAIN_DESC sd;
   g_pSwapChain->GetDesc(&sd);
 
@@ -218,25 +211,20 @@ void Resize()
   ID3D11Texture2D* pTexture;
   hr = g_pSwapChain->GetBuffer( 0, __uuidof( ID3D11Texture2D ), ( LPVOID* )&pTexture );
 
-
   if (hasComputeShaders)
   {
     hr = g_pd3dDevice->CreateUnorderedAccessView( pTexture, NULL, &g_pComputeOutput );
   }
+  hr = g_pd3dDevice->CreateRenderTargetView( pTexture, NULL, &g_pRenderTargetView );
 
-  {
-    hr = g_pd3dDevice->CreateRenderTargetView( pTexture, NULL, &g_pRenderTargetView );
-
-    // Setup the viewport
-    D3D11_VIEWPORT vp;
-    vp.Width  = width;
-    vp.Height = height;
-    vp.MinDepth = 0.0f;
-    vp.MaxDepth = 1.0f;
-    vp.TopLeftX = 0;
-    vp.TopLeftY = 0;
-    g_pImmediateContext->RSSetViewports( 1, &vp );
-  }
+  D3D11_VIEWPORT vp;
+  vp.Width  = width;
+  vp.Height = height;
+  vp.MinDepth = 0.0f;
+  vp.MaxDepth = 1.0f;
+  vp.TopLeftX = 0.f;
+  vp.TopLeftY = 0.f;
+  g_pImmediateContext->RSSetViewports( 1, &vp );
 
   pTexture->Release();
 }
@@ -257,16 +245,6 @@ HRESULT InitDevice()
     #ifdef _DEBUG
     createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
     #endif
-
-    D3D_DRIVER_TYPE driverTypes[] =
-    {
-       #ifdef WARP
-             D3D_DRIVER_TYPE_REFERENCE,
-       #else
-             D3D_DRIVER_TYPE_HARDWARE,        
-       #endif
-    };
-    unsigned int numDriverTypes = sizeof( driverTypes ) / sizeof( driverTypes[0] );
 
     DXGI_SWAP_CHAIN_DESC sd;
     ZeroMemory( &sd, sizeof(sd));
@@ -293,12 +271,11 @@ HRESULT InitDevice()
 	}
     else
     {
-      // try dx 10
-      FeatureLevel = D3D_FEATURE_LEVEL_10_0;
-      sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-      hr = D3D11CreateDeviceAndSwapChain( NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, createDeviceFlags, &FeatureLevel,1,  D3D11_SDK_VERSION, &sd, &g_pSwapChain, &g_pd3dDevice, NULL, &g_pImmediateContext );
-      if (hr == S_OK)
-        hasComputeShaders = false;
+        FeatureLevel = D3D_FEATURE_LEVEL_10_0;
+        sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        hr = D3D11CreateDeviceAndSwapChain( NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, createDeviceFlags, &FeatureLevel,1,  D3D11_SDK_VERSION, &sd, &g_pSwapChain, &g_pd3dDevice, NULL, &g_pImmediateContext );
+        if (hr == S_OK)
+            hasComputeShaders = false;
     }
     useComputeShaders = hasComputeShaders;
 	if (FAILED(hr))
@@ -307,14 +284,10 @@ HRESULT InitDevice()
 		return hr;
 	}
 
-    // Create compute shader
-    DWORD dwShaderFlags = 0;
-    #if defined( DEBUG ) || defined( _DEBUG )
-      dwShaderFlags |= D3D10_SHADER_DEBUG;
-    #endif
-
     if (hasComputeShaders)
-    { CreateComputeShaderObject(); }
+    {
+        CreateComputeShaderObject();
+    }
     CreateGraphicShaderObject();
 
     // Create constant buffer
@@ -334,7 +307,6 @@ HRESULT InitDevice()
 static void CreateGraphicShaderObject()
 {
     HRESULT hr = S_OK;
-    ID3D10Blob* pVSBuf = NULL;
     ID3DBlob* pErrorBlob = nullptr;
     ID3DBlob* pBlob = nullptr;
     
@@ -442,20 +414,17 @@ static void CreateComputeShaderObject()
 void CleanupDevice()
 {
     SAFE_RELEASE( g_pCS_QJulia4D );
-    SAFE_RELEASE(g_pComputeOutput);
     SAFE_RELEASE(g_pcbFractal);
-
-    if( g_pImmediateContext ) g_pImmediateContext->ClearState();
-
     SAFE_RELEASE(g_pComputeOutput);
     SAFE_RELEASE(g_pRenderTargetView);
 
     if( g_pSwapChain )
     {
-      g_pSwapChain->SetFullscreenState(false, NULL); // switch back to full screen else not working ok
-      g_pSwapChain->Release();
+        g_pSwapChain->SetFullscreenState(false, NULL); // switch back to full screen else not working ok
+        g_pSwapChain->Release();
     }
 
+    if( g_pImmediateContext ) g_pImmediateContext->ClearState();
     if( g_pImmediateContext ) g_pImmediateContext->Release();
     if( g_pd3dDevice ) g_pd3dDevice->Release();
 }
@@ -492,9 +461,9 @@ LRESULT CALLBACK WndProc( HWND hWnd, unsigned int msg, WPARAM wParam, LPARAM lPa
       {
         nMouseWheelDelta = (short) HIWORD(wParam);
         if (nMouseWheelDelta < 0)
-          zoom = zoom * 1.1;
+          zoom = zoom * 1.1f;
         else
-          zoom = zoom / 1.1;
+          zoom = zoom / 1.1f;
       }
       if (msg == WM_LBUTTONDOWN && !lbdown)
       {
@@ -537,6 +506,12 @@ LRESULT CALLBACK WndProc( HWND hWnd, unsigned int msg, WPARAM wParam, LPARAM lPa
           char key = tolower((int)wParam);
           switch (key)
           {
+            case 'u':
+            {
+                CreateGraphicShaderObject();
+                CreateComputeShaderObject();
+              break;
+            }
             case 'v':
             {
               vsync = !vsync;
@@ -654,7 +629,6 @@ static void RandomColor( float v[4] )
 static void UpdateColor( float t[4], float a[4], float b[4] )
 {
     *t += 0.01f *dt;
-   
     if ( *t >= 1.0f )
     {
         *t = 0.0f;
@@ -670,20 +644,23 @@ static void UpdateColor( float t[4], float a[4], float b[4] )
 
 void Render()
 {
-	static float elapsedPrev = 0;
+	static float elapsedPrev = 0.0f;
 	float t = time.Elapsed();
-	dt = (elapsedPrev == 0) ? 1 : (t-elapsedPrev)/1000 * 20;
+	dt = (elapsedPrev == 0.f) ? 1 : (t - elapsedPrev)/1000 * 20;
 	elapsedPrev = t;
+
 	if(animated)
 	{
-      UpdateMu( &MuT, MuA, MuB );
-      Interpolate( MuC, MuT, MuA, MuB );
-      UpdateColor( &ColorT, ColorA, ColorB );
-      Interpolate(ColorC, ColorT, ColorA, ColorB );
+        UpdateMu( &MuT, MuA, MuB );
+        Interpolate( MuC, MuT, MuA, MuB );
+
+        UpdateColor( &ColorT, ColorA, ColorB );
+        Interpolate(ColorC, ColorT, ColorA, ColorB );
 	}
 
     D3D11_MAPPED_SUBRESOURCE msr;
     g_pImmediateContext->Map(g_pcbFractal, 0, D3D11_MAP_WRITE_DISCARD, 0,  &msr);
+
 	QJulia4DConstants mc;
     mc.c_height = g_height;
     mc.c_width  = g_width;
@@ -698,9 +675,10 @@ void Render()
     mc.mu[1] = MuC[1];
     mc.mu[2] = MuC[2];
     mc.mu[3] = MuC[3];
+    
     for (int j=0; j<3; j++)
-    for (int i=0; i<3; i++)
-      mc.orientation[i + 4*j] = trackBall.GetRotationMatrix()(j,i);
+        for (int i=0; i<3; i++)
+            mc.orientation[i + 4*j] = trackBall.GetRotationMatrix()(j,i);
     *(QJulia4DConstants *)msr.pData = mc;
     g_pImmediateContext->Unmap(g_pcbFractal,0);
 
@@ -729,14 +707,14 @@ void Render()
     // Present our back buffer to our front buffer
     g_pSwapChain->Present( vsync ? 1 : 0, 0 );
 
-    if ( (t=time.Elapsed()/1000) - timer > 1) // every second
+    if ( (t = time.Elapsed()/1000) - timer > 1.f) // every second
     {  
 	    float td = t - timer; // real time interval a bit more than a second
         timer = t;
         if (useComputeShaders)
-            swprintf(message,L"     QJulia4D V1.5 FPS %.2f, using compute shader (dx11)", (float)fps/td);
+            swprintf(message,L" QJulia4D \t FPS=%.2f, \t compute shader", (float)fps/td);
         else
-            swprintf(message,L"     QJulia4D V1.5 FPS %.2f, using pixel shader (dx10)", (float)fps/td);
+            swprintf(message,L" QJulia4D \t FPS=%.2f, \t pixel shader", (float)fps/td);
         SetWindowText(g_hWnd, message);
         fps=0;
     }
