@@ -27,10 +27,10 @@ Demos
 Controls
 ========
 
-Space bar           : toggle morphing animation
-Mouse left drag     : rotate fractal
-Mouse wheel         : zoom in/out
-P key               : toggle between compute and pixel shader
-S key               : toggle selfshadow
-+/- num key         : increase /decrease fractal detail
-Alt + Enter         : toggle full screen
+- Space bar           : toggle morphing animation
+- Mouse left drag     : rotate fractal
+- Mouse wheel         : zoom in/out
+- P key               : toggle between compute and pixel shader
+- S key               : toggle selfshadow
+- +/- num key         : increase /decrease fractal detail
+- Alt + Enter         : toggle full screen
