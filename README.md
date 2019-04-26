@@ -3,13 +3,11 @@ QJulia4D
 
 5 Jan 2017 by Yaochuang Ding, 
 
-
 Info
 ====
 
 Raytraced morphing Julia quaternion fractal.
 on windows 10 platform
-
 
 Source
 ======
@@ -20,6 +18,11 @@ But source code cannot be built on Windows 10 because of old DX APIs, I ported i
 The default configuration is Release x64.
 
 
+Demos
+========
+![demo](./1.png)
+![demo](./2.png)
+![demo](./3.png)
 
 Controls
 ========

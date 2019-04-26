@@ -171,7 +171,7 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
     g_hInst = hInstance;
     RECT rc = { 0, 0, COLS, ROWS };
     AdjustWindowRect( &rc, WS_OVERLAPPEDWINDOW, FALSE );
-    g_hWnd = CreateWindow( L"QJulia4DWindowClass", L"QJulia4D DX11", WS_OVERLAPPEDWINDOW, 0, 0, rc.right - rc.left, rc.bottom - rc.top, NULL, NULL, hInstance, NULL );
+    g_hWnd = CreateWindow( L"QJulia4DWindowClass", L"QJulia4D DX11 On Windows 10", WS_OVERLAPPEDWINDOW, 0, 0, rc.right - rc.left, rc.bottom - rc.top, NULL, NULL, hInstance, NULL );
 
     if( !g_hWnd )
         return E_FAIL;
@@ -712,9 +712,9 @@ void Render()
 	    float td = t - timer; // real time interval a bit more than a second
         timer = t;
         if (useComputeShaders)
-            swprintf(message,L" QJulia4D \t FPS=%.2f, \t compute shader", (float)fps/td);
+            swprintf(message,L" QJulia4D DX11 on Windows 10\t FPS=%.2f, \t compute shader", (float)fps/td);
         else
-            swprintf(message,L" QJulia4D \t FPS=%.2f, \t pixel shader", (float)fps/td);
+            swprintf(message,L" QJulia4D DX11 on Windows 10\t FPS=%.2f, \t pixel shader", (float)fps/td);
         SetWindowText(g_hWnd, message);
         fps=0;
     }
