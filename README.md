@@ -1,7 +1,7 @@
 QJulia4D
 ===============
 
-5 Jan 2017 by Yaochuang Ding, 
+5 Jan 2017 by ychding11
 
 Info
 ====
@@ -20,9 +20,9 @@ The default configuration is Release x64.
 
 Demos
 ========
-![demo](./1.png)
-![demo](./2.png)
-![demo](./3.png)
+![demo](./demo/1.png)
+![demo](./demo/2.png)
+![demo](./demo/3.png)
 
 Controls
 ========
