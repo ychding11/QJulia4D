@@ -17,6 +17,8 @@ Then ported to HLSL by [Jan Vlietinck] (http://users.skynet.be/fquake/)
 But source code cannot be built on Windows 10 because of old DX APIs, I ported it to make it build OK on Windows 10 platform.
 The default configuration is Release x64.
 
+There is a git submodule in project. Please refer [Git Tool Submodule](https://git-scm.com/book/en/v2/Git-Tools-Submodules) for details.
+
 
 Demos
 ========
